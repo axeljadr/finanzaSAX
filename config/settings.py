@@ -15,8 +15,9 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
 
 raw_hosts = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost")
-# Esto permite leer la variable del .env correctamente
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = [h.strip() for h in raw_hosts.split(",") if h.strip()]
+if ".railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".railway.app")
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
