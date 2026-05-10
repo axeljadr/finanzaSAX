@@ -1,0 +1,223 @@
+{% extends 'base.html' %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 m-0">{{ verbose_name|title }}</h1>
+  <a href="{% url 'movimientos' %}" class="btn btn-outline-secondary btn-sm"
+    >← Volver</a
+  >
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="post" id="movimientoForm">
+      {% csrf_token %}
+
+      <!-- FECHA -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label fw-bold">Fecha</label>
+          {{ form.fecha }} {% if form.fecha.errors %}
+          <div class="text-danger small">{{ form.fecha.errors }}</div>
+          {% endif %}
+        </div>
+
+        <!-- MONTO -->
+        <div class="col-md-3">
+          <label class="form-label fw-bold">Monto</label>
+          {{ form.monto }} {% if form.monto.errors %}
+          <div class="text-danger small">{{ form.monto.errors }}</div>
+          {% endif %}
+        </div>
+
+
+        <!-- DESCRIPCIÓN -->
+        <div class="col-md-3">
+          <label class="form-label fw-bold">Descripción</label>
+          {{ form.descripcion }} {% if form.descripcion.errors %}
+          <div class="text-danger small">{{ form.descripcion.errors }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <!-- CONCEPTO -->
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Concepto</label>
+          {{ form.concepto }} {% if form.concepto.errors %}
+          <div class="text-danger small">{{ form.concepto.errors }}</div>
+          {% endif %}
+        </div>
+
+        <!-- TIPO (autocompletado por concepto) -->
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Tipo</label>
+          {{ form.tipo }} {% if form.tipo.errors %}
+          <div class="text-danger small">{{ form.tipo.errors }}</div>
+          {% endif %}
+        </div>
+
+        <!-- TARJETA ORIGEN -->
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Tarjeta origen</label>
+          {{ form.tarjeta }}
+          <!-- Saldo disponible -->
+          <div
+            id="saldo-tarjeta"
+            class="form-text text-info fw-bold"
+            style="display: none"
+          ></div>
+          {% if form.tarjeta.errors %}
+          <div class="text-danger small">{{ form.tarjeta.errors }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- TARJETA DESTINO (solo transferencias) -->
+      <div class="row g-3 mb-3" id="row-tarjeta-destino" style="display: none">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">
+            Tarjeta destino
+            <span class="badge bg-warning text-dark ms-1"
+              >Solo transferencias</span
+            >
+          </label>
+          {{ form.tarjeta_destino }}
+          <div
+            id="saldo-tarjeta-destino"
+            class="form-text text-info fw-bold"
+            style="display: none"
+          ></div>
+          {% if form.tarjeta_destino.errors %}
+          <div class="text-danger small">{{ form.tarjeta_destino.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="alert alert-info py-2 px-3 mb-0 w-100 small">
+            <strong>Transferencia:</strong> El monto se resta de la tarjeta
+            origen y se suma a la tarjeta destino. No afecta ingresos ni gastos.
+          </div>
+        </div>
+      </div>
+
+      <!-- PRESUPUESTO DEL CONCEPTO (si existe) -->
+      <div
+        id="presupuesto-info"
+        class="alert alert-warning py-2 px-3 mb-3"
+        style="display: none"
+      >
+        <strong>Presupuesto del mes:</strong>
+        Asignado: <span id="p-asignado" class="fw-bold"></span> | Usado:
+        <span id="p-usado" class="fw-bold text-danger"></span> | Disponible:
+        <span id="p-disponible" class="fw-bold"></span>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <a href="{% url 'movimientos' %}" class="btn btn-outline-secondary"
+          >Cancelar</a
+        >
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  // ── Datos desde Django ────────────────────────────────────────────────────────
+  const conceptoTipoMap = {
+      {% for c in concepto_tipo_map %}
+      "{{ c.id }}": "{{ c.tipo_default_id }}",
+      {% endfor %}
+  };
+
+  const saldosTarjetas = {
+      {% for t in saldos_tarjetas %}
+      "{{ t.id }}": { "saldo": "{{ t.monto }}", "banco": "{{ t.banco }}" },
+      {% endfor %}
+  };
+
+  const presupuestosConcepto = {
+      {% for p in presupuestos_usuario %}
+      "{{ p.concepto_id }}": {
+          "asignado": "{{ p.monto_asignado }}",
+          "usado": "{{ p.monto_usado }}",
+          "restante": "{{ p.monto_restante }}"
+      },
+      {% endfor %}
+  };
+
+  // ── Referencias DOM ───────────────────────────────────────────────────────────
+  const conceptoSel       = document.getElementById("id_concepto");
+  const tipoSel           = document.getElementById("id_tipo");
+  const tarjetaSel        = document.getElementById("id_tarjeta");
+  const tarjetaDestSel    = document.getElementById("id_tarjeta_destino");
+  const rowDestino        = document.getElementById("row-tarjeta-destino");
+  const saldoOrigen       = document.getElementById("saldo-tarjeta");
+  const saldoDestino      = document.getElementById("saldo-tarjeta-destino");
+  const presupuestoInfo   = document.getElementById("presupuesto-info");
+  const pAsignado         = document.getElementById("p-asignado");
+  const pUsado            = document.getElementById("p-usado");
+  const pDisponible       = document.getElementById("p-disponible");
+
+  // ── Autocompletar tipo según concepto ────────────────────────────────────────
+  function actualizarTipo() {
+      const cid = conceptoSel.value;
+      const tid = conceptoTipoMap[cid];
+      if (tid && tid !== "None") tipoSel.value = tid;
+      actualizarPresupuesto();
+  }
+
+  // ── Mostrar/ocultar tarjeta destino según tipo ───────────────────────────────
+  function actualizarTipoUI() {
+      const tipoTexto = tipoSel.options[tipoSel.selectedIndex]?.text?.toLowerCase() || "";
+      if (tipoTexto.includes("transferencia")) {
+          rowDestino.style.display = "";
+      } else {
+          rowDestino.style.display = "none";
+          tarjetaDestSel.value = "";
+          saldoDestino.style.display = "none";
+      }
+  }
+
+  // ── Mostrar saldo de tarjeta ──────────────────────────────────────────────────
+  function mostrarSaldo(selectEl, infoEl) {
+      const tid = selectEl.value;
+      if (tid && saldosTarjetas[tid]) {
+          const s = parseFloat(saldosTarjetas[tid].saldo);
+          infoEl.textContent = `Saldo actual: $${s.toFixed(2)}`;
+          infoEl.className = `form-text fw-bold ${s >= 0 ? "text-info" : "text-danger"}`;
+          infoEl.style.display = "";
+      } else {
+          infoEl.style.display = "none";
+      }
+  }
+
+  // ── Mostrar presupuesto del concepto ─────────────────────────────────────────
+  function actualizarPresupuesto() {
+      const cid = conceptoSel.value;
+      if (cid && presupuestosConcepto[cid]) {
+          const p = presupuestosConcepto[cid];
+          const restante = parseFloat(p.restante);
+          pAsignado.textContent   = `$${parseFloat(p.asignado).toFixed(2)}`;
+          pUsado.textContent      = `$${parseFloat(p.usado).toFixed(2)}`;
+          pDisponible.textContent = `$${restante.toFixed(2)}`;
+          pDisponible.className   = `fw-bold ${restante >= 0 ? "text-success" : "text-danger"}`;
+          presupuestoInfo.style.display = "";
+      } else {
+          presupuestoInfo.style.display = "none";
+      }
+  }
+
+  // ── Eventos ───────────────────────────────────────────────────────────────────
+  conceptoSel.addEventListener("change", actualizarTipo);
+  tipoSel.addEventListener("change", actualizarTipoUI);
+  tarjetaSel.addEventListener("change", () => mostrarSaldo(tarjetaSel, saldoOrigen));
+  tarjetaDestSel.addEventListener("change", () => mostrarSaldo(tarjetaDestSel, saldoDestino));
+
+  // ── Inicializar al cargar ─────────────────────────────────────────────────────
+  actualizarTipo();
+  actualizarTipoUI();
+  mostrarSaldo(tarjetaSel, saldoOrigen);
+  mostrarSaldo(tarjetaDestSel, saldoDestino);
+  actualizarPresupuesto();
+</script>
+{% endblock %}

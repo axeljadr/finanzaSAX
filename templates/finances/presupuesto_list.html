@@ -1,0 +1,92 @@
+{% extends 'base.html' %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 m-0">Presupuesto Mensual</h1>
+  <a href="{% url 'presupuesto_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-lg"></i> Nuevo presupuesto
+  </a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Mes</th>
+        <th>Concepto</th>
+        <th>Asignado</th>
+        <th>Usado</th>
+        <th>Restante</th>
+        <th>Progreso</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in presupuestos %}
+      <tr>
+        <td>{{ p.mes|date:"F Y" }}</td>
+        <td>{{ p.concepto.nombre_concepto }}</td>
+        <td>${{ p.monto_asignado }}</td>
+        <td class="text-danger">${{ p.monto_usado }}</td>
+        <td
+          class="{% if p.monto_restante >= 0 %}text-success{% else %}text-danger{% endif %}"
+        >
+          ${{ p.monto_restante }}
+        </td>
+        <td style="min-width: 120px">
+          {% if p.monto_asignado > 0 %} {% widthratio p.monto_usado
+          p.monto_asignado 100 as pct %}
+          <div class="progress" style="height: 8px">
+            <div
+              class="progress-bar {% if pct > 100 %}bg-danger{% elif pct > 75 %}bg-warning{% else %}bg-success{% endif %}"
+              style="width:{% if pct > 100 %}100{% else %}{{ pct }}{% endif %}%"
+            ></div>
+          </div>
+          <small class="text-muted">{{ pct }}%</small>
+          {% endif %}
+        </td>
+        <td>
+          <a
+            class="btn btn-sm btn-outline-warning"
+            href="{% url 'presupuesto_update' p.id %}"
+            >Editar</a
+          >
+          <a
+            class="btn btn-sm btn-outline-danger"
+            href="{% url 'presupuesto_delete' p.id %}"
+            >Eliminar</a
+          >
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="text-center text-muted">
+          Sin presupuestos registrados.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<nav>
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.previous_page_number }}"
+        >Anterior</a
+      >
+    </li>
+    {% endif %}
+    <li class="page-item active">
+      <span class="page-link">{{ page_obj.number }}</span>
+    </li>
+    {% if page_obj.has_next %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.next_page_number }}"
+        >Siguiente</a
+      >
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %} {% endblock %}

@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+{% block content %}
+{% load humanize %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 m-0">Dashboard Financiero</h1>
+    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#panelFiltros">
+        <i class="bi bi-funnel"></i> Filtros {% if hay_filtros %}<span class="badge bg-warning text-dark">Activos</span>{% endif %}
+    </button>
+</div>
+
+<div class="collapse {% if hay_filtros %}show{% endif %}" id="panelFiltros">
+    <div class="card shadow-sm border-primary mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 small">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Usuario</label>
+                    <select name="usuario" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.usuario_id }}" {% if filtros.usuario == u.usuario_id|stringformat:"s" %}selected{% endif %}>{{ u.usuario__username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Concepto</label>
+                    <select name="concepto" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for c in conceptos %}
+                        <option value="{{ c.id }}" {% if filtros.concepto == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre_concepto }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Desde</label>
+                    <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ filtros.fecha_desde }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Hasta</label>
+                    <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ filtros.fecha_hasta }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Búsqueda</label>
+                    <input type="text" name="q" class="form-control form-control-sm" placeholder="Descripción..." value="{{ filtros.q }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Filtrar</button>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm w-100">Limpiar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 border-start border-success border-4">
+            <div class="card-body py-2">
+                <div class="small text-muted text-uppercase">Ingresos</div>
+                <div class="h4 mb-0 text-success">${{ ingresos|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 border-start border-danger border-4">
+            <div class="card-body py-2">
+                <div class="small text-muted text-uppercase">Gastos</div>
+                <div class="h4 mb-0 text-danger">${{ gastos|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 border-start border-primary border-4">
+            <div class="card-body py-2">
+                <div class="small text-muted text-uppercase">Balance</div>
+                <div class="h4 mb-0 {% if balance >= 0 %}text-primary{% else %}text-danger{% endif %}">${{ balance|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 border-start border-info border-4 bg-light">
+            <div class="card-body py-2">
+                <div class="small text-muted text-uppercase">Ahorro Total</div>
+                <div class="h4 mb-0 text-info">${{ ahorros|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">Evolución de Ingresos vs Gastos</div>
+            <div class="card-body">
+                <canvas id="balanceChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">Distribución de Ahorros</div>
+            <div class="card-body d-flex flex-column align-items-center">
+                <div style="width: 100%; max-width: 250px;">
+                    <canvas id="ahorrosPieChart"></canvas>
+                </div>
+                <table class="table table-sm mt-3 mb-0 small">
+                    {% for item in resumen_usuarios %}
+                    <tr>
+                        <td>{{ item.username }}</td>
+                        <td class="text-end fw-bold">${{ item.ahorros|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+        <span>Movimientos Filtrados</span>
+        <a href="{% url 'movimientos' %}" class="btn btn-link btn-sm p-0">Ver todos</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+            <thead class="table-light">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Concepto</th>
+                    <th>Descripción</th>
+                    <th class="text-end">Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mov in movimientos_lista %}
+                <tr>
+                    <td>{{ mov.fecha|date:"d/m/y" }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ mov.usuario.username }}</span></td>
+                    <td>{{ mov.concepto.nombre_concepto }}</td>
+                    <td class="text-truncate" style="max-width: 250px;">{{ mov.descripcion|default:"—" }}</td>
+                    <td class="text-end fw-bold {% if mov.tipo.nombre == 'Gasto' %}text-danger{% else %}text-success{% endif %}">
+                        ${{ mov.monto|floatformat:2|intcomma }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-4 text-muted">No se encontraron movimientos.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Gráfica de Líneas
+const ctxLine = document.getElementById('balanceChart').getContext('2d');
+new Chart(ctxLine, {
+    type: 'line',
+    data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [
+            { label: 'Ingresos', data: {{ chart_ingresos|safe }}, borderColor: '#198754', backgroundColor: '#19875422', fill: true, tension: 0.4 },
+            { label: 'Gastos', data: {{ chart_gastos|safe }}, borderColor: '#dc3545', backgroundColor: '#dc354522', fill: true, tension: 0.4 }
+        ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// Gráfica de Pastel
+const ctxPie = document.getElementById('ahorrosPieChart').getContext('2d');
+new Chart(ctxPie, {
+    type: 'doughnut',
+    data: {
+        labels: {{ pie_labels|safe }},
+        datasets: [{
+            data: {{ pie_data|safe }},
+            backgroundColor: ['#0dcaf0', '#6610f2', '#fd7e14', '#20c997'],
+            borderWidth: 2
+        }]
+    },
+    options: { 
+        responsive: true, 
+        maintainAspectRatio: false,
+        plugins: { 
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: (item) => ` ${item.label}: $${item.raw}`
+                }
+            }
+        },
+        cutout: '70%'
+    }
+});
+</script>
+{% endblock %}

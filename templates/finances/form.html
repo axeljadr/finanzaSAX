@@ -1,0 +1,141 @@
+{% extends 'base.html' %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 m-0">{{ verbose_name|title }}</h1>
+  <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm"
+    >← Volver</a
+  >
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        {% if field.name == 'tarjeta_destino' %}
+        <div class="mb-3 campo-destino">
+        {% else %}
+        <div class="mb-3">
+        {% endif %}
+          <label class="form-label fw-bold">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+          {% if field.name == 'tarjeta' %}<div id="saldo-tarjeta" class="form-text fw-bold" style="display:none"></div>{% endif %}
+          {% if field.name == 'tarjeta_destino' %}<div id="saldo-tarjeta-destino" class="form-text fw-bold" style="display:none"></div>{% endif %}
+        </div>
+      {% endfor %}
+
+      <!-- Presupuesto del concepto (solo movimientos) -->
+      {% if presupuestos_usuario is not None %}
+      <div
+        id="presupuesto-info"
+        class="alert alert-warning py-2 px-3 mb-3"
+        style="display: none"
+      >
+        <strong>Presupuesto del mes:</strong>
+        Asignado: <span id="p-asignado" class="fw-bold"></span> | Usado:
+        <span id="p-usado" class="fw-bold text-danger"></span> | Disponible:
+        <span id="p-disponible" class="fw-bold"></span>
+      </div>
+      {% endif %}
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary"
+          >Cancelar</a
+        >
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>.campo-destino { display: none; }</style>
+{% if concepto_tipo_map is not None %}
+<script>
+  const conceptoTipoMap = {
+      {% for c in concepto_tipo_map %}"{{ c.id }}": "{{ c.tipo_default_id }}",{% endfor %}
+  };
+
+  const saldosTarjetas = {
+      {% for t in saldos_tarjetas %}"{{ t.id }}": { saldo: "{{ t.monto }}", banco: "{{ t.banco }}" },{% endfor %}
+  };
+
+  const presupuestosConcepto = {
+      {% for p in presupuestos_usuario %}
+      "{{ p.concepto_id }}": {
+          asignado: "{{ p.monto_asignado }}",
+          usado: "{{ p.monto_usado }}",
+          restante: "{{ p.monto_restante }}"
+      },
+      {% endfor %}
+  };
+
+  const conceptoSel     = document.getElementById("id_concepto");
+  const tipoSel         = document.getElementById("id_tipo");
+  const tarjetaSel      = document.getElementById("id_tarjeta");
+  const tarjetaDestSel  = document.getElementById("id_tarjeta_destino");
+  const campoDestino    = document.querySelector(".campo-destino");
+  const saldoOrigen     = document.getElementById("saldo-tarjeta");
+  const saldoDestino    = document.getElementById("saldo-tarjeta-destino");
+  const presupuestoInfo = document.getElementById("presupuesto-info");
+
+  function actualizarTipo() {
+      const tid = conceptoTipoMap[conceptoSel.value];
+      if (tid && tid !== "None") tipoSel.value = tid;
+      actualizarPresupuesto();
+  }
+
+  function actualizarTipoUI() {
+      const texto = tipoSel.options[tipoSel.selectedIndex]?.text?.toLowerCase() || "";
+      if (texto.includes("transferencia")) {
+          campoDestino.style.display = "";
+      } else {
+          campoDestino.style.display = "none";
+          tarjetaDestSel.value = "";
+          saldoDestino.style.display = "none";
+      }
+  }
+
+  function mostrarSaldo(sel, infoEl) {
+      const data = saldosTarjetas[sel.value];
+      if (data) {
+          const s = parseFloat(data.saldo);
+          infoEl.textContent = `Saldo actual: $${s.toFixed(2)}`;
+          infoEl.className = `form-text fw-bold ${s >= 0 ? "text-info" : "text-danger"}`;
+          infoEl.style.display = "";
+      } else {
+          infoEl.style.display = "none";
+      }
+  }
+
+  function actualizarPresupuesto() {
+      const p = presupuestosConcepto[conceptoSel.value];
+      if (p && presupuestoInfo) {
+          const restante = parseFloat(p.restante);
+          document.getElementById("p-asignado").textContent  = `$${parseFloat(p.asignado).toFixed(2)}`;
+          document.getElementById("p-usado").textContent     = `$${parseFloat(p.usado).toFixed(2)}`;
+          const pDisp = document.getElementById("p-disponible");
+          pDisp.textContent = `$${restante.toFixed(2)}`;
+          pDisp.className   = `fw-bold ${restante >= 0 ? "text-success" : "text-danger"}`;
+          presupuestoInfo.style.display = "";
+      } else if (presupuestoInfo) {
+          presupuestoInfo.style.display = "none";
+      }
+  }
+
+  if (conceptoSel) conceptoSel.addEventListener("change", actualizarTipo);
+  if (tipoSel) tipoSel.addEventListener("change", actualizarTipoUI);
+  if (tarjetaSel) tarjetaSel.addEventListener("change", () => mostrarSaldo(tarjetaSel, saldoOrigen));
+  if (tarjetaDestSel) tarjetaDestSel.addEventListener("change", () => mostrarSaldo(tarjetaDestSel, saldoDestino));
+  
+  if (conceptoSel) {
+      actualizarTipo();
+      actualizarPresupuesto();
+  }
+  if (tipoSel) actualizarTipoUI();
+  if (tarjetaSel) mostrarSaldo(tarjetaSel, saldoOrigen);
+  if (tarjetaDestSel) mostrarSaldo(tarjetaDestSel, saldoDestino);
+</script>
+{% endif %} {% endblock %}
