@@ -14,10 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
 
-raw_hosts = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost")
-ALLOWED_HOSTS = [h.strip() for h in raw_hosts.split(",") if h.strip()]
-if ".railway.app" not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(".railway.app")
+ALLOWED_HOSTS = ["localhost", "finanzasax.up.railway.app", "*.railway.app"]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://finanzasax.up.railway.app",
@@ -35,6 +32,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django_filters",
     "finances.apps.FinancesConfig",
+    "whitenoise.runserver_nostatic",
 ]
 
 MIDDLEWARE = [
@@ -69,23 +67,8 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=True,
-        )
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)}
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -100,7 +83,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS =[BASE_DIR / "static",
+]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 LOGIN_URL = "login"
