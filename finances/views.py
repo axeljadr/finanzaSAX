@@ -461,11 +461,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         queryset = self._base_queryset()
 
         # Resúmenes generales
-        ingresos = self._sumar_por_tipo(queryset, "ingreso")
+        
+        insert = self._sumar_por_tipo(queryset, "ingreso")
+        ahorros  = self._sumar_por_tipo(queryset, "ahorro")
+        ingresos = insert + ahorros    
         gastos   = self._sumar_por_tipo(queryset, "gasto")
         balance  = ingresos - gastos
 
-        # Ahorros por usuario (Tarjetas débito/efectivo)
         ahorros_qs = (
             Tarjeta.objects
             .filter(tipo_tarjeta__in=["debito", "efectivo"])
@@ -475,14 +477,34 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ahorros_total = sum(r["total"] for r in ahorros_qs)
         ahorros_por_usuario = {r["usuario_id"]: r["total"] for r in ahorros_qs}
 
-        # Resumen detallado por usuario
+        # 2. Obtener el detalle de CADA tarjeta por usuario
+        # En get_context_data, donde creas tarjetas_detalle
+        tarjetas_detalle = {}
+        for tarjeta in Tarjeta.objects.filter(tipo_tarjeta__in=["debito", "efectivo"]).select_related('usuario'):
+            uid = tarjeta.usuario_id
+            # Construye un nombre legible para la tarjeta
+            if tarjeta.tipo_tarjeta == "efectivo":
+                nombre_mostrar = "Efectivo"
+            else:
+                # Para débito, muestra banco y últimos 4 dígitos si existen
+                if tarjeta.ultimos_4_digitos:
+                    nombre_mostrar = f"{tarjeta.banco} (****{tarjeta.ultimos_4_digitos})"
+                else:
+                    nombre_mostrar = tarjeta.banco
+            tarjetas_detalle.setdefault(uid, []).append({
+                'nombre': nombre_mostrar,
+                'tipo': tarjeta.get_tipo_tarjeta_display(),   # "Débito" o "Efectivo"
+                'monto': tarjeta.monto
+            })
+
+        # 3. Construir resumen por usuario (ya tenías la lógica de movimientos)
         usuarios_resumen = {}
-        # Aquí recorremos el queryset filtrado para ver la actividad de los usuarios
         for mov in queryset:
             row = usuarios_resumen.setdefault(
                 mov.usuario_id,
                 {
                     "username": mov.usuario.username,
+                    "user_id": mov.usuario_id,   # añadimos id para referenciar
                     "ingresos": Decimal("0.00"),
                     "gastos": Decimal("0.00"),
                     "transferencias": Decimal("0.00"),
@@ -501,9 +523,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         for uid, row in usuarios_resumen.items():
             row["balance"] = row["ingresos"] - row["gastos"]
             row["ahorros"] = ahorros_por_usuario.get(uid, Decimal("0.00"))
+            row["tarjetas"] = tarjetas_detalle.get(uid, [])   # lista de tarjetas
             resumen_usuarios.append(row)
         resumen_usuarios.sort(key=lambda x: x["username"])
-
         # Datos para Gráfica Mensual (Líneas)
         mensual = (
             queryset.annotate(mes=TruncMonth("fecha"))

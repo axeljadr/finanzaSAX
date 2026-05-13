@@ -15,9 +15,10 @@ load_dotenv()
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
 
-ALLOWED_HOSTS = ["localhost", "finanzasax.up.railway.app", "*.railway.app"]
+ALLOWED_HOSTS = ["*", "finanzasax.up.railway.app", "*.railway.app"]
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://localhost:8000",
     "https://finanzasax.up.railway.app",
     "https://*.railway.app",
 
@@ -68,8 +69,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
-    'default': dj_database_url.parse(
-        os.getenv("DATABASE_URL")
+    'default': dj_database_url.config(default=os.getenv("DATABASE_URL")
     )
 }
 AUTH_PASSWORD_VALIDATORS = [
